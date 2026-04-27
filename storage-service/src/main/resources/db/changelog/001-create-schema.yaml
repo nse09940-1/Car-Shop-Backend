@@ -1,0 +1,82 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-schema
+      author: S
+      changes:
+        - sql:
+            splitStatements: true
+            stripComments: true
+            sql: |
+              create table cars (
+                  id uuid primary key,
+                  created_at timestamptz not null,
+                  updated_at timestamptz not null,
+                  removed boolean not null default false,
+                  vin varchar(100) not null,
+                  car_model_id uuid not null,
+                  color varchar(100) not null,
+                  price bigint not null,
+                  available boolean not null,
+                  available_for_test_drive boolean not null
+              );
+
+              create table parts (
+                  id uuid primary key,
+                  created_at timestamptz not null,
+                  updated_at timestamptz not null,
+                  removed boolean not null default false,
+                  name varchar(200) not null,
+                  part_number varchar(100) not null,
+                  price bigint not null,
+                  part_type varchar(50) not null,
+                  in_stock integer not null,
+                  reserved integer not null
+              );
+
+              create table part_compatible_model_codes (
+                  part_id uuid not null references parts(id),
+                  model_code varchar(100) not null
+              );
+
+              create table assembly_orders (
+                  id uuid primary key,
+                  created_at timestamptz not null,
+                  updated_at timestamptz not null,
+                  removed boolean not null default false,
+                  source_order_id uuid not null,
+                  source_order_type varchar(50) not null,
+                  car_id uuid,
+                  car_model_id uuid,
+                  warehouse_employee_id uuid,
+                  status varchar(50) not null,
+                  failure_reason varchar(500)
+              );
+
+              create table assembly_order_required_parts (
+                  assembly_order_id uuid not null references assembly_orders(id),
+                  part_id uuid not null,
+                  quantity integer not null,
+                  primary key (assembly_order_id, part_id)
+              );
+
+              create table outbox_events (
+                  id uuid primary key,
+                  created_at timestamptz not null,
+                  updated_at timestamptz not null,
+                  removed boolean not null default false,
+                  event_type varchar(100) not null,
+                  topic varchar(200) not null,
+                  aggregate_id uuid not null,
+                  trace_id varchar(100) not null,
+                  payload text not null,
+                  published boolean not null default false,
+                  published_at timestamptz
+              );
+
+              create table processed_events (
+                  id uuid primary key,
+                  event_type varchar(100) not null,
+                  trace_id varchar(100) not null,
+                  order_id uuid not null,
+                  processed_at timestamptz not null
+              );

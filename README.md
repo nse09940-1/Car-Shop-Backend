@@ -1,191 +1,195 @@
-# Car Shop Backend
+# Car-Shop-Backend
 
-`Car Shop Backend` - серверная часть автосалона на Spring Boot.
-Сервис покрывает каталог автомобилей, конфигуратор комплектаций, заказы (из наличия и под заказ), учет деталей на складе и работу с тест-драйвами.
+## Стек
 
-Проект построен вокруг доменной модели и явных бизнес-правил: совместимость опций с моделью, валидные переходы статусов заказов, резервирование/списание деталей и ролевые ограничения для пользователей.
+- `Java 21`
+- `Spring Boot 3.3`
+- `Spring Web`
+- `Spring Data JPA`
+- `Spring Security`
+- `JWT`
+- `Keycloak`
+- `PostgreSQL`
+- `Liquibase`
+- `Apache Kafka`
+- `MapStruct`
+- `Gradle Multi-Module`
+- `JUnit 5`
+- `Testcontainers`
+- `OpenAPI`
+- `Docker`
 
-## Возможности
+## О проекте
 
-- Каталог автомобилей с фильтрацией по цене, бренду, модели и техническим параметрам
-- Конфигуратор: базовая комплектация модели
-- Конфигуратор: доступные опции по модели
-- Конфигуратор: расчет итоговой цены
-- Конфигуратор: проверка совместимости выбранных опций
-- Оформление заказа автомобиля из наличия
-- Оформление кастомного заказа по выбранной конфигурации
-- Управление жизненным циклом заказов через policy-слой
-- Автоматическое резервирование, освобождение и списание деталей для кастомных заказов
-- CRUD API для деталей
-- Управление списком автомобилей для тест-драйва и заявками клиентов
-- Административные API для моделей, автомобилей, пользователей, опций, заказов и тест-драйвов
-- Swagger UI для интерактивного просмотра и тестирования API
+`Car-Shop-Backend` — микросервисный backend для автосалона. Сервисы взаимодействуют через `Kafka`, построены на гексагональной архитектуре , используют `JWT`-аутентификацию и ролевую `Security`, а межсервисные изменения состояний публикуются с помощью `outbox pattern`.
 
-## Технологии и стек
+Система разделена на два сервиса с отдельными бд:
 
-- Java 21
-- Spring Boot 3.3.5
-- Spring Web
-- Spring Data JPA
-- PostgreSQL 16
-- Liquibase
-- MapStruct
-- SpringDoc OpenAPI (`swagger-ui`)
-- Gradle
-- JUnit 5
-- Spring Boot Test
+- `order-service` — заказы, статусы, конфигуратор, тест-драйвы, менеджерский контур.
+- `storage-service` — автомобили, детали, резервирование, списание, сборочные задания.
+- `shared-contracts` — общие Kafka-контракты: `EventEnvelope`, `EventType`, `OrderType`, payload-объекты.
 
-## Архитектура
+У обоих сервисов гексагональная архитектура:
 
-Архитектура гексагональная:
+- `application` — сервисы , порты;
+- `domain` — бизнес-логика;
+- `infrastructure` — JPA, Kafka, Security, HTTP-клиенты;
+- `presentation` — REST API.
 
-- `domain`: доменные сущности, value objects, инварианты, исключения
-- `application`: use-case сервисы, DTO, порты (`repository`, `policy`), маппинг
-- `infrastructure`: JPA-адаптеры, persistence entity, Spring Data репозитории, policy-реализации
-- `presentation`: REST-контроллеры и глобальная обработка ошибок
+## Взаимодействие сервисов
 
+В проекте используются два типа взаимодействия:
 
-## Быстрый старт
+- HTTP — для синхронных `read-only` проверок;
+- Kafka — для для асинхронной обработки событий.
 
-### 1) Поднять PostgreSQL
+### Заказ автомобиля из наличия
 
-```bash
-docker compose -f docker/docker-compose.yml up -d
-```
+1. Клиент создаёт заказ в `order-service`.
+2. Сервис сохраняет `StockCarOrder` со статусом `CREATED`.
+3. В той же транзакции пишет в `outbox_events` событие `STOCK_CAR_RESERVATION_REQUESTED`.
+4. `OrderOutboxPublisher` публикует событие в `order.events`.
+5. `storage-service` получает событие, проверяет наличие автомобиля и резервирует его: `available=false`.
+6. После этого `storage-service` публикует `STOCK_CAR_RESERVED` или `STOCK_CAR_RESERVATION_REJECTED`.
+7. `order-service` обрабатывает ответ склада и переводит заказ либо в `MANAGER_APPROVED`, либо в `CANCELLED`.
 
-Параметры БД по умолчанию:
+После оплаты поток продолжается аналогично:
 
-- database: `auto_shop`
-- username: `postgres`
-- password: `postgres`
-- port: `5432`
+1. При переходе в `PAID` `order-service` пишет `STOCK_CAR_WRITE_OFF_REQUESTED`.
+2. `storage-service` завершает списание автомобиля и публикует `STOCK_CAR_WRITTEN_OFF` или `STOCK_CAR_WRITE_OFF_REJECTED`.
+3. `order-service` переводит заказ в `READY_FOR_HANDOVER` либо отменяет его.
 
-### 2) Запустить приложение
+### Кастомный заказ
 
-Linux/macOS:
+1. Клиент создаёт заказ с набором опций.
+2. `order-service` валидирует совместимость через `CompatibilityPolicy`, считает цену и собирает `requiredParts`.
+3. Заказ сохраняется со статусом `CREATED`, затем в outbox пишется `ORDER_SENT_FOR_APPROVAL`.
+4. `storage-service` получает событие и проверяет, хватает ли деталей.
+5. Если деталей хватает, они резервируются, а `assembly_order` переводится в `RESERVED`.
+6. В ответ публикуется `ORDER_APPROVED`; если деталей не хватает — `ORDER_REJECTED`.
+7. `order-service` переводит заказ в `WAREHOUSE_APPROVED` либо `CANCELLED`.
 
-```bash
-./gradlew bootRun
-```
+После оплаты:
 
-Windows PowerShell:
+1. `order-service` публикует `ORDER_EXECUTION_REQUESTED`.
+2. `storage-service` не резервирует детали повторно, а списывает уже зарезервированные и переводит сборку в `IN_PROGRESS`.
+3. В ответ публикуется `ORDER_EXECUTION_STARTED`.
+4. `order-service` переводит заказ в `AWAITING_DELIVERY`.
 
-```powershell
-.\gradlew.bat bootRun
-```
+Для отмены до запуска исполнения используется отдельный поток:
 
-Приложение стартует на `http://localhost:8080`.
-
-### 3) Открыть Swagger UI
-
-- `http://localhost:8080/swagger-ui.html`
-
-## Конфигурация
-
-Переменные окружения:
-
-- `APP_DB_URL` (по умолчанию: `jdbc:postgresql://localhost:5432/auto_shop`)
-- `APP_DB_USER` (по умолчанию: `postgres`)
-- `APP_DB_PASSWORD` (по умолчанию: `postgres`)
-- `APP_HTTP_PORT` (по умолчанию: `8080`)
-
-Liquibase применяется автоматически при запуске:
-
-- создание схемы
-- индексы и ограничения
-- seed-данные (пользователи, модели, автомобили, детали, опции)
-
-## Тестирование
-
-Unit и сервисные тесты:
-
-```bash
-./gradlew test
-```
-
-Интеграционные тесты (Testcontainers + PostgreSQL):
-
-```bash
-./gradlew integrationTest
-```
-
-
-## Основные API-группы
-
-### Каталог
-
-- `GET /api/cars`
-- `GET /api/cars/{id}`
-
-### Конфигуратор
-
-- `GET /api/configurator/{modelId}/base`
-- `GET /api/configurator/{modelId}/options`
-- `POST /api/configurator/{modelId}/build`
-- `GET /api/configurator/base-configurations`
-
-### Заказы
-
-- `POST /api/orders/stock`
-- `PATCH /api/orders/stock/{id}/status`
-- `GET /api/orders/stock/{id}`
-- `GET /api/orders/stock`
-- `POST /api/orders/custom`
-- `PATCH /api/orders/custom/{id}/status`
-- `GET /api/orders/custom/{id}`
-- `GET /api/orders/custom`
-
-### Детали
-
-- `POST /api/parts`
-- `GET /api/parts/{id}`
-- `GET /api/parts`
-- `PUT /api/parts/{id}`
-- `DELETE /api/parts/{id}`
+- `order-service` публикует `ORDER_RESERVATION_RELEASE_REQUESTED`;
+- `storage-service` снимает резерв деталей;
+- повторная обработка безопасна за счёт идемпотентности.
 
 ### Тест-драйв
 
-- `POST /api/test-drives/requests`
-- `GET /api/test-drives/requests`
-- `POST /api/test-drives/cars/{carId}`
-- `DELETE /api/test-drives/cars/{carId}`
-- `GET /api/test-drives/cars`
+Сценарий тест-драйва построен через синхронный вызов:
 
-### Администрирование
+1. Клиент создаёт заявку в `order-service`.
+2. `order-service` вызывает `storage-service` по `/internal/cars/{id}`.
+3. Проверяется, существует ли автомобиль, доступен ли он и включён ли в тест-драйвный пул.
+4. Только после этого заявка сохраняется.
 
-Все административные методы доступны под префиксом `/api/admin/*`:
+## Messaging и консистентность
 
-- модели автомобилей
-- автомобили
-- пользователи
-- детали
-- опции (`wheels`, `transmissions`, `steerings`, `interiors`)
-- заказы (stock/custom)
-- заявки на тест-драйв
+### Outbox Pattern
 
-## Сборка и Docker
+В проекте реализован `outbox pattern`: доменное изменение и запись в `outbox_events` происходят в одной транзакции, а публикация в Kafka вынесена в отдельный scheduled publisher. Это исключает расхождение между зафиксированным состоянием в БД и отправкой события в брокер.
 
-Сборка jar:
+### Идемпотентность
 
-```bash
-./gradlew clean bootJar
-```
+Kafka-consumer'ы сначала проверяют `processed_events` по `eventId`. Если событие уже обработано, оно игнорируется. Это делает повторную доставку безопасной.
 
-Сборка Docker-образа:
+### Trace ID
 
-```bash
-docker build -f docker/Dockerfile -t car-shop-backend .
-```
+Оба сервиса используют `TraceIdFilter` и `TraceIdProvider`:
 
-Запуск контейнера приложения:
+- принимают `X-Trace-Id` из входящего запроса или генерируют новый;
+- кладут его в `MDC`;
+- передают тот же `traceId` в `EventEnvelope`.
 
-```bash
-docker run --rm -p 8080:8080 ^
-  -e APP_DB_URL=jdbc:postgresql://host.docker.internal:5432/auto_shop ^
-  -e APP_DB_USER=postgres ^
-  -e APP_DB_PASSWORD=postgres ^
-  car-shop-backend
-```
+Это позволяет связать HTTP-запрос и Kafka-события одним `traceId`.
+
+## Security
+
+Оба сервиса используют Spring Security для валидации JWT-токенов, выпущенных `Keycloak`.
+
+### Роли
+
+В realm `auto-shop` используются роли:
+
+- `USER`
+- `MANAGER`
+- `WAREHOUSE_ADMIN`
+- `ADMIN`
+
+Роли извлекаются из `realm_access.roles` через `KeycloakRealmRoleConverter`.
+
+### Идентификация пользователя
+
+Для бизнес-логики используется claim `app_user_id`:
+
+- `SecurityCurrentUserProvider` читает его из JWT;
+- значение должно быть `UUID`;
+- этот `UUID` используется в проверках владельца заказа и при работе с доменными пользователями.
+
+Это разделяет identity-провайдер и доменную модель пользователей.
+
+### Авторизация в `order-service`
+
+На уровне HTTP:
+
+- `/api/admin/**` — `ADMIN`;
+- создание заказов — `USER` или `ADMIN`;
+- просмотр и изменение заказов — `USER`, `MANAGER`, `ADMIN`;
+- создание тест-драйва — `USER` или `ADMIN`;
+- просмотр заявок на тест-драйв — `MANAGER` или `ADMIN`.
+
+На уровне application-сервисов:
+
+- `order-service` дополнительно проверяет, что пользователь существует в app_users; если у него нет роли `ADMIN`, то для создания заказа и заявки на тест-драйв его доменная роль должна быть `CLIENT`.
+- допустимые переходы статусов проверяются отдельно через `DefaultOrderTransitionPolicy`.
+
+На уровне объекта:
+
+- `OrderAccessEvaluator` проверяет владельца заказа;
+- клиент может читать и оплачивать только свои заказы;
+- клиент может отменять заказ только на разрешённых стадиях;
+- менеджер может менять только разрешённые бизнес-статусы;
+- администратор имеет полный доступ.
+
+Авторизация сочетает ролевые проверки, ownership и контроль допустимого состояния заказа.
+
+### Авторизация в `storage-service`
+
+- `/internal/**` открыт для внутреннего синхронного чтения;
+- `/api/assembly-orders/**` — `WAREHOUSE_ADMIN` или `ADMIN`;
+- `/api/parts/**` — `WAREHOUSE_ADMIN` или `ADMIN`;
+- остальной `/api/**` контур также ограничен ролями склада и администратора.
+
+### Ошибки
+
+Для `401` и `403` используются отдельные JSON handlers:
+
+- `RestAuthenticationEntryPoint`
+- `RestAccessDeniedHandler`
+
+API возвращает JSON-ответы вместо стандартных HTML-страниц Spring Security.
 
 
+## Тестирование
 
+Есть два уровня тестов:
+
+- unit-тесты для domain, policies, services, security components и repository-адаптеров;
+- integration tests через `Testcontainers` для `PostgreSQL`, `Kafka`, миграций, security-ограничений и outbox-сценариев.
+
+Покрыты в том числе:
+
+- права владельца заказа;
+- права менеджера, склада и администратора;
+- резервирование и списание деталей;
+- обработка Kafka-событий;
+- применение Liquibase-миграций;
+- security-поведение на HTTP-уровне.

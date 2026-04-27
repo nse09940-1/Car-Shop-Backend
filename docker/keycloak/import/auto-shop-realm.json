@@ -1,0 +1,151 @@
+{
+  "realm": "auto-shop",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "USER"
+      },
+      {
+        "name": "MANAGER"
+      },
+      {
+        "name": "WAREHOUSE_ADMIN"
+      },
+      {
+        "name": "ADMIN"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "auto-shop-api",
+      "name": "auto-shop-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "http://localhost:8081/*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "protocolMappers": [
+        {
+          "name": "app_user_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "app_user_id",
+            "claim.name": "app_user_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "client",
+      "enabled": true,
+      "email": "client@example.com",
+      "firstName": "Client",
+      "lastName": "One",
+      "attributes": {
+        "app_user_id": [
+          "20000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "client",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "username": "manager",
+      "enabled": true,
+      "email": "manager@example.com",
+      "firstName": "Manager",
+      "lastName": "One",
+      "attributes": {
+        "app_user_id": [
+          "20000000-0000-0000-0000-000000000002"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER",
+        "MANAGER"
+      ]
+    },
+    {
+      "username": "warehouse-admin",
+      "enabled": true,
+      "email": "warehouse@example.com",
+      "firstName": "Warehouse",
+      "lastName": "Admin",
+      "attributes": {
+        "app_user_id": [
+          "20000000-0000-0000-0000-000000000004"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "warehouse-admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "WAREHOUSE_ADMIN"
+      ]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@example.com",
+      "firstName": "System",
+      "lastName": "Admin",
+      "attributes": {
+        "app_user_id": [
+          "20000000-0000-0000-0000-000000000003"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMIN"
+      ]
+    }
+  ]
+}

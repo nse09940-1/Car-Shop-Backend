@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-indexes-constraints
+      author: S
+      changes:
+        - sql:
+            splitStatements: true
+            stripComments: true
+            sql: |
+              alter table app_users add constraint uq_users_email unique (email);
+
+              create index idx_car_models_brand on car_models(brand);
+              create index idx_users_removed on app_users(removed);
+              create index idx_wheel_options_removed on wheel_options(removed);
+              create index idx_transmission_options_removed on transmission_options(removed);
+              create index idx_steering_options_removed on steering_options(removed);
+              create index idx_interior_options_removed on interior_options(removed);
+              create index idx_stock_orders_removed on stock_orders(removed);
+              create index idx_custom_orders_removed on custom_orders(removed);
+              create index idx_test_drive_removed on test_drive_requests(removed);
+              create index idx_outbox_events_pending on outbox_events(published, created_at);
+              create index idx_outbox_events_aggregate on outbox_events(aggregate_id);
+              create index idx_processed_events_order on processed_events(order_id);

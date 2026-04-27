@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-indexes-constraints
+      author: S
+      changes:
+        - sql:
+            splitStatements: true
+            stripComments: true
+            sql: |
+              alter table cars add constraint uq_cars_vin unique (vin);
+              alter table parts add constraint uq_parts_part_number unique (part_number);
+              alter table assembly_orders add constraint uq_assembly_orders_source_order unique (source_order_id);
+
+              create index idx_cars_removed on cars(removed);
+              create index idx_parts_removed on parts(removed);
+              create index idx_assembly_orders_removed on assembly_orders(removed);
+              create index idx_assembly_orders_status on assembly_orders(status);
+              create index idx_outbox_events_pending on outbox_events(published, created_at);
+              create index idx_outbox_events_aggregate on outbox_events(aggregate_id);
+              create index idx_processed_events_order on processed_events(order_id);

@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: storage-service
+  datasource:
+    url: ${APP_DB_URL:jdbc:postgresql://localhost:5432/storage_db}
+    username: ${APP_DB_USER:postgres}
+    password: ${APP_DB_PASSWORD:postgres}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${APP_SECURITY_ISSUER_URI:http://localhost:8081/realms/auto-shop}
+          jwk-set-uri: ${APP_SECURITY_JWK_SET_URI:http://localhost:8081/realms/auto-shop/protocol/openid-connect/certs}
+  kafka:
+    bootstrap-servers: ${APP_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        archive:
+          autodetection: none
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+server:
+  port: ${APP_HTTP_PORT:8082}
+
+app:
+  kafka:
+    consumer-group: ${APP_KAFKA_CONSUMER_GROUP:storage-service}
+  outbox:
+    publish-interval-ms: ${APP_OUTBOX_PUBLISH_INTERVAL_MS:1000}

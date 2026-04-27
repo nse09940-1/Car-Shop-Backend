@@ -16,6 +16,43 @@ services:
       timeout: 3s
       retries: 10
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    container_name: auto-shop-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_STRICT: "false"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./keycloak/import:/opt/keycloak/data/import
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nhost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep '200' <&3\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  app:
+    container_name: auto-shop-app
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      APP_DB_URL: jdbc:postgresql://postgres:5432/auto_shop
+      APP_SECURITY_ISSUER_URI: http://localhost:8081/realms/auto-shop
+      APP_SECURITY_JWK_SET_URI: http://host.docker.internal:8081/realms/auto-shop/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
 volumes:
   postgres_data:
-

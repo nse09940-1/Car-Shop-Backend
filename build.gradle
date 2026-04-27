@@ -1,105 +1,107 @@
 plugins {
-    id 'java'
     id 'idea'
-    id 'org.springframework.boot' version '3.3.5'
-    id 'io.spring.dependency-management' version '1.1.6'
-}
-
-group = 'org.example'
-version = '1.0-SNAPSHOT'
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
-
-repositories {
-    mavenCentral()
+    id 'org.springframework.boot' version '3.3.5' apply false
+    id 'io.spring.dependency-management' version '1.1.6' apply false
 }
 
 ext {
     mapstructVersion = '1.5.5.Final'
     testcontainersVersion = '1.21.4'
-    set('testcontainers.version', testcontainersVersion)
 }
 
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.liquibase:liquibase-core'
-    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
-    runtimeOnly 'org.postgresql:postgresql'
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'idea'
 
-    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+    group = 'org.example'
+    version = '1.0-SNAPSHOT'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
-    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
+    repositories {
+        mavenCentral()
+    }
 
-sourceSets {
-    integrationTest {
-        java.setSrcDirs(['src/integrationTest/java'])
-        resources.setSrcDirs(['src/integrationTest/resources'])
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += output + compileClasspath
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs += ['-parameters']
+    }
+
+    test {
+        useJUnitPlatform()
+        testLogging {
+            events 'passed', 'skipped', 'failed'
+        }
     }
 }
 
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
+configure(subprojects.findAll { it.name != 'shared-contracts' }) {
+    apply plugin: 'io.spring.dependency-management'
 
-dependencies {
-    integrationTestImplementation sourceSets.main.output
-    integrationTestImplementation 'org.springframework.boot:spring-boot-starter-test'
-    integrationTestImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
-    integrationTestImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
-    integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
+    ext.set('testcontainers.version', rootProject.ext.testcontainersVersion)
 
-idea {
-    module {
-        testSources.from sourceSets.integrationTest.java.srcDirs
-        testResources.from sourceSets.integrationTest.resources.srcDirs
+    sourceSets {
+        integrationTest {
+            java.setSrcDirs(['src/integrationTest/java'])
+            resources.setSrcDirs(['src/integrationTest/resources'])
+            compileClasspath += sourceSets.main.output
+            runtimeClasspath += output + compileClasspath
+        }
+    }
+
+    configurations {
+        integrationTestImplementation.extendsFrom testImplementation
+        integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+    }
+
+    dependencies {
+        integrationTestImplementation sourceSets.main.output
+        integrationTestImplementation 'org.springframework.boot:spring-boot-starter-test'
+        integrationTestImplementation "org.testcontainers:junit-jupiter:${rootProject.ext.testcontainersVersion}"
+        integrationTestImplementation "org.testcontainers:postgresql:${rootProject.ext.testcontainersVersion}"
+        integrationTestImplementation "org.testcontainers:kafka:${rootProject.ext.testcontainersVersion}"
+        integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
+    idea {
+        module {
+            testSources.from sourceSets.integrationTest.java.srcDirs
+            testResources.from sourceSets.integrationTest.resources.srcDirs
+        }
+    }
+
+    tasks.register('integrationTest', Test) {
+        description = 'Runs integration tests.'
+        group = 'verification'
+        testClassesDirs = sourceSets.integrationTest.output.classesDirs
+        classpath = sourceSets.integrationTest.runtimeClasspath
+        useJUnitPlatform()
+        shouldRunAfter test
+        if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+            def dockerHost = System.getProperty('itDockerHost')
+            def dockerApiVersion = System.getProperty('itDockerApiVersion')
+            if (dockerHost != null && !dockerHost.isBlank()) {
+                environment 'DOCKER_HOST', dockerHost
+                environment 'DOCKER_CONTEXT', ''
+                systemProperty 'docker.host', dockerHost
+                systemProperty 'org.testcontainers.dockerclient.strategy',
+                        'org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy'
+            }
+            if (dockerApiVersion != null && !dockerApiVersion.isBlank()) {
+                environment 'DOCKER_API_VERSION', dockerApiVersion
+                systemProperty 'docker.api.version', dockerApiVersion
+            }
+        }
+        testLogging {
+            events 'passed', 'skipped', 'failed'
+        }
     }
 }
 
-tasks.register('integrationTest', Test) {
-    description = 'Runs integration tests.'
-    group = 'verification'
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-    useJUnitPlatform()
-    shouldRunAfter test
-    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        def dockerHost = System.getProperty('itDockerHost') ?: 'tcp://localhost:2375'
-        def dockerApiVersion = '1.44'
-        environment 'DOCKER_HOST', dockerHost
-        environment 'DOCKER_API_VERSION', dockerApiVersion
-        environment 'DOCKER_CONTEXT', ''
-        systemProperty 'docker.host', dockerHost
-        systemProperty 'docker.api.version', dockerApiVersion
-        systemProperty 'org.testcontainers.dockerclient.strategy',
-                'org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy'
-    }
-    testLogging {
-        events 'passed', 'skipped', 'failed'
-    }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.compilerArgs += ['-parameters']
-}
-
-test {
-    useJUnitPlatform()
-    testLogging {
-        events 'passed', 'skipped', 'failed'
-    }
+tasks.register('integrationTest') {
+    dependsOn ':order-service:integrationTest', ':storage-service:integrationTest'
 }

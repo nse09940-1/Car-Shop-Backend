@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-add-warehouse-admin-seed
+      author: S
+      changes:
+        - sql:
+            splitStatements: true
+            stripComments: true
+            sql: |
+              insert into app_users (id, created_at, updated_at, removed, name, email, role)
+              values ('20000000-0000-0000-0000-000000000004', now(), now(), false, 'Warehouse Admin', 'warehouse@example.com', 'WAREHOUSE_ADMIN');

@@ -1,1 +1,5 @@
-rootProject.name = 'java-template'
+rootProject.name = 'auto-shop'
+
+include 'shared-contracts'
+include 'order-service'
+include 'storage-service'

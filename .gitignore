@@ -1,10 +1,16 @@
 .gradle
+.gradle-user-home/
 build/
+**/build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
+.tmp-order-jar/
+.tmp-storage-jar/
+*.tmp
 
 ### IntelliJ IDEA ###
+.idea/
 .idea/modules.xml
 .idea/jarRepositories.xml
 .idea/compiler.xml

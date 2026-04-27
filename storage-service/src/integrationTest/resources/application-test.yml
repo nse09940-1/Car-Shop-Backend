@@ -1,0 +1,20 @@
+spring:
+  kafka:
+    bootstrap-servers: ${APP_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  datasource:
+    driver-class-name: org.postgresql.Driver
+
+springdoc:
+  swagger-ui:
+    enabled: false
+
+app:
+  kafka:
+    consumer-group: storage-service-test
+

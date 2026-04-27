@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-seed-data
+      author: S
+      changes:
+        - sql:
+            splitStatements: true
+            stripComments: true
+            sql: |
+              insert into parts (id, created_at, updated_at, removed, name, part_number, price, part_type, in_stock, reserved) values
+              ('30000000-0000-0000-0000-000000000001', now(), now(), false, 'Wheel Kit', 'PART-WHEEL-01', 90000, 'WHEELS', 10, 0),
+              ('30000000-0000-0000-0000-000000000002', now(), now(), false, 'Transmission Kit', 'PART-TRANS-01', 120000, 'TRANSMISSION', 10, 0),
+              ('30000000-0000-0000-0000-000000000003', now(), now(), false, 'Steering Kit', 'PART-STEER-01', 50000, 'STEERING', 10, 0),
+              ('30000000-0000-0000-0000-000000000004', now(), now(), false, 'Interior Kit', 'PART-INT-01', 80000, 'INTERIOR', 10, 0);
+
+              insert into part_compatible_model_codes (part_id, model_code) values
+              ('30000000-0000-0000-0000-000000000001', '320i'),
+              ('30000000-0000-0000-0000-000000000001', 'A4'),
+              ('30000000-0000-0000-0000-000000000002', '320i'),
+              ('30000000-0000-0000-0000-000000000002', 'A4'),
+              ('30000000-0000-0000-0000-000000000003', '320i'),
+              ('30000000-0000-0000-0000-000000000003', 'A4'),
+              ('30000000-0000-0000-0000-000000000004', '320i'),
+              ('30000000-0000-0000-0000-000000000004', 'A4');
+
+              insert into cars (
+                id, created_at, updated_at, removed, vin, car_model_id, color, price, available, available_for_test_drive
+              ) values
+              ('50000000-0000-0000-0000-000000000001', now(), now(), false, 'VIN-BMW-001', '10000000-0000-0000-0000-000000000001', 'Red', 3200000, true, true),
+              ('50000000-0000-0000-0000-000000000002', now(), now(), false, 'VIN-AUDI-001', '10000000-0000-0000-0000-000000000002', 'Black', 3050000, true, false);
