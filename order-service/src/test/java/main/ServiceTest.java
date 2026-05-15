@@ -241,7 +241,35 @@ class ServiceTest {
             service.changeStockStatus(dto.id(), StockOrderStatus.PAID);
             service.markStockCarWrittenOff(dto.id());
 
-            assertEquals(StockOrderStatus.READY_FOR_HANDOVER, service.findStockById(dto.id()).status());
+            assertEquals(StockOrderStatus.AWAITING_DELIVERY, service.findStockById(dto.id()).status());
+        }
+
+        @Test
+        void stockCancellationAfterReservationEnqueuesReservationRelease() {
+            User client = addClient();
+            addManager();
+            currentUserProvider.login(client.id(), SecurityRoles.USER);
+
+            StockOrderDto dto = service.createStockOrder(UUID.randomUUID());
+            service.markStockCarReserved(dto.id());
+            service.changeStockStatus(dto.id(), StockOrderStatus.CANCELLED);
+
+            verify(outboxService).enqueueStockCarReservationReleaseRequested(any(main.domain.order.StockCarOrder.class));
+        }
+
+        @Test
+        void stockCancellationAfterPaidEnqueuesReservationRelease() {
+            User client = addClient();
+            addManager();
+            currentUserProvider.login(client.id(), SecurityRoles.USER);
+
+            StockOrderDto dto = service.createStockOrder(UUID.randomUUID());
+            service.markStockCarReserved(dto.id());
+            service.changeStockStatus(dto.id(), StockOrderStatus.AWAITING_PAYMENT);
+            service.changeStockStatus(dto.id(), StockOrderStatus.PAID);
+            service.changeStockStatus(dto.id(), StockOrderStatus.CANCELLED);
+
+            verify(outboxService).enqueueStockCarReservationReleaseRequested(any(main.domain.order.StockCarOrder.class));
         }
 
         @Test
@@ -283,14 +311,14 @@ class ServiceTest {
             CustomOrderDto dto = service.createCustomOrder(modelId, Map.of(ConfigType.WHEELS, optionId));
             assertEquals(CustomOrderStatus.CREATED, dto.status());
             assertEquals(3_050_000, dto.totalPrice().rubles());
-            verify(outboxService).enqueueOrderSentForApproval(any(CustomCarOrder.class), eq(List.of(new RequiredPartItem(partId, 1))));
+            verify(outboxService).enqueueCustomCarPartsReservationRequested(any(CustomCarOrder.class), eq(List.of(new RequiredPartItem(partId, 1))));
 
             service.approveCustomOrder(dto.id());
             assertEquals(CustomOrderStatus.WAREHOUSE_APPROVED, service.findCustomById(dto.id()).status());
             service.changeCustomStatus(dto.id(), CustomOrderStatus.AWAITING_PAYMENT);
             service.changeCustomStatus(dto.id(), CustomOrderStatus.PAID);
 
-            verify(outboxService).enqueueOrderExecutionRequested(any(CustomCarOrder.class));
+            verify(outboxService).enqueueCustomExecutionRequested(any(CustomCarOrder.class));
         }
 
         @Test
@@ -309,7 +337,7 @@ class ServiceTest {
             CustomOrderDto dto = service.createCustomOrder(modelId, Map.of(ConfigType.WHEELS, optionId));
             service.changeCustomStatus(dto.id(), CustomOrderStatus.CANCELLED);
 
-            verify(outboxService).enqueueReservationReleaseRequested(any(CustomCarOrder.class));
+            verify(outboxService).enqueueCustomReservationReleaseRequested(any(CustomCarOrder.class));
         }
 
         @Test
@@ -330,8 +358,9 @@ class ServiceTest {
             service.changeCustomStatus(dto.id(), CustomOrderStatus.AWAITING_PAYMENT);
             service.changeCustomStatus(dto.id(), CustomOrderStatus.PAID);
             service.markCustomOrderAwaitingDelivery(dto.id());
+            service.markOrderReadyForHandover(dto.id(), contracts.events.OrderType.CUSTOM);
 
-            assertEquals(CustomOrderStatus.AWAITING_DELIVERY, service.findCustomById(dto.id()).status());
+            assertEquals(CustomOrderStatus.READY_FOR_HANDOVER, service.findCustomById(dto.id()).status());
         }
 
         @Test
@@ -345,6 +374,7 @@ class ServiceTest {
             service.markStockCarReserved(dto.id());
             service.changeStockStatus(dto.id(), StockOrderStatus.AWAITING_PAYMENT);
             service.changeStockStatus(dto.id(), StockOrderStatus.PAID);
+            service.markStockCarWrittenOff(dto.id());
             service.markOrderReadyForHandover(dto.id(), contracts.events.OrderType.STOCK);
             assertEquals(StockOrderStatus.READY_FOR_HANDOVER, service.findStockById(dto.id()).status());
         }

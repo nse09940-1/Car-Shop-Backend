@@ -1,48 +1,57 @@
-.gradle
+# ----------------------------
+# Build and Gradle artifacts
+# ----------------------------
+.gradle/
+.gradle-home/
+.gradle-local/
 .gradle-user-home/
-build/
 **/build/
+bin/
+out/
+*.class
+*.jar
+*.war
+*.ear
+
+# Keep Gradle wrapper JAR under version control
 !gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+
+# ----------------------------
+# Temporary folders/files
+# ----------------------------
 .tmp-order-jar/
 .tmp-storage-jar/
+tmp/
 *.tmp
 
-### IntelliJ IDEA ###
+# ----------------------------
+# IDE files
+# ----------------------------
 .idea/
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
 *.iws
 *.iml
 *.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
+.vscode/
 
-### Eclipse ###
+# Eclipse / STS
 .apt_generated
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
 .sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+# NetBeans
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
 
-### VS Code ###
-.vscode/
-
-### Mac OS ###
+# ----------------------------
+# OS and logs
+# ----------------------------
 .DS_Store
+Thumbs.db
+*.log

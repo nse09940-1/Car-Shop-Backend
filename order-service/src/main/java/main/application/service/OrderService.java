@@ -89,11 +89,18 @@ public class OrderService {
     public StockOrderDto changeStockStatus(UUID orderId, StockOrderStatus newStatus) {
         StockCarOrder order = stockOrderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Stock order not found"));
+        StockOrderStatus currentStatus = order.status();
         assertTransition(order.status(), newStatus);
         order.setStatus(newStatus);
         stockOrderRepository.save(order);
         if (newStatus == StockOrderStatus.PAID) {
             orderOutboxService.enqueueStockCarWriteOffRequested(order);
+        }
+        if (newStatus == StockOrderStatus.CANCELLED
+                && (currentStatus == StockOrderStatus.MANAGER_APPROVED
+                || currentStatus == StockOrderStatus.AWAITING_PAYMENT
+                || currentStatus == StockOrderStatus.PAID)) {
+            orderOutboxService.enqueueStockCarReservationReleaseRequested(order);
         }
         return AppMapper.toDto(order);
     }
@@ -132,7 +139,7 @@ public class OrderService {
                 builtConfiguration.totalPrice(),
                 CustomOrderStatus.CREATED);
         customOrderRepository.save(order);
-        orderOutboxService.enqueueOrderSentForApproval(order, buildRequiredParts(order));
+        orderOutboxService.enqueueCustomCarPartsReservationRequested(order, buildRequiredParts(order));
         return AppMapper.toDto(order);
     }
 
@@ -148,13 +155,13 @@ public class OrderService {
         order.setStatus(newStatus);
         customOrderRepository.save(order);
         if (newStatus == CustomOrderStatus.PAID) {
-            orderOutboxService.enqueueOrderExecutionRequested(order);
+            orderOutboxService.enqueueCustomExecutionRequested(order);
         }
         if (newStatus == CustomOrderStatus.CANCELLED
                 && (currentStatus == CustomOrderStatus.CREATED
                 || currentStatus == CustomOrderStatus.WAREHOUSE_APPROVED
                 || currentStatus == CustomOrderStatus.AWAITING_PAYMENT)) {
-            orderOutboxService.enqueueReservationReleaseRequested(order);
+            orderOutboxService.enqueueCustomReservationReleaseRequested(order);
         }
         return AppMapper.toDto(order);
     }
@@ -180,12 +187,18 @@ public class OrderService {
             case STOCK -> {
                 StockCarOrder order = stockOrderRepository.findById(orderId)
                         .orElseThrow(() -> new EntityNotFoundException("Stock order not found"));
-                if (order.status() == StockOrderStatus.PAID) {
+                if (order.status() == StockOrderStatus.AWAITING_DELIVERY) {
                     order.setStatus(StockOrderStatus.READY_FOR_HANDOVER);
                     stockOrderRepository.save(order);
                 }
             }
             case CUSTOM -> {
+                CustomCarOrder order = customOrderRepository.findById(orderId)
+                        .orElseThrow(() -> new EntityNotFoundException("Custom order not found"));
+                if (order.status() == CustomOrderStatus.AWAITING_DELIVERY) {
+                    order.setStatus(CustomOrderStatus.READY_FOR_HANDOVER);
+                    customOrderRepository.save(order);
+                }
             }
         }
     }
@@ -238,7 +251,7 @@ public class OrderService {
         StockCarOrder order = stockOrderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Stock order not found"));
         if (order.status() == StockOrderStatus.PAID) {
-            order.setStatus(StockOrderStatus.READY_FOR_HANDOVER);
+            order.setStatus(StockOrderStatus.AWAITING_DELIVERY);
             stockOrderRepository.save(order);
         }
     }

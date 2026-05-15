@@ -30,7 +30,7 @@ public class StorageDecisionConsumer {
         this.processedEventJpaRepository = Objects.requireNonNull(processedEventJpaRepository, "incomingEventJpaRepository is required");
     }
 
-    @KafkaListener(topics = "#{T(contracts.events.EventTopics).STORAGE_EVENTS_V1}", groupId = "${app.kafka.consumer-group}")
+    @KafkaListener(topics = "#{T(contracts.events.EventTopics).STORAGE_EVENTS}", groupId = "${app.kafka.consumer-group}")
     @Transactional
     public void onMessage(String message) throws Exception {
         JsonNode root = objectMapper.readTree(message);
@@ -63,7 +63,7 @@ public class StorageDecisionConsumer {
 
     private boolean processEvent(EventType eventType, UUID orderId, OrderType orderType) {
         if (orderType == OrderType.STOCK) {
-            if (eventType == EventType.STOCK_CAR_RESERVED) {
+            if (eventType == EventType.STOCK_CAR_RESERVATION_COMPLETED) {
                 orderService.markStockCarReserved(orderId);
                 return true;
             }
@@ -71,7 +71,7 @@ public class StorageDecisionConsumer {
                 orderService.rejectStockCarReservation(orderId);
                 return true;
             }
-            if (eventType == EventType.STOCK_CAR_WRITTEN_OFF) {
+            if (eventType == EventType.STOCK_CAR_WRITE_OFF_COMPLETED) {
                 orderService.markStockCarWrittenOff(orderId);
                 return true;
             }
@@ -79,19 +79,31 @@ public class StorageDecisionConsumer {
                 orderService.rejectStockCarWriteOff(orderId);
                 return true;
             }
+            if (eventType == EventType.STOCK_CAR_RESERVATION_RELEASE_COMPLETED
+                    || eventType == EventType.STOCK_CAR_RESERVATION_RELEASE_REJECTED) {
+                return true;
+            }
             return false;
         }
 
-        if (eventType == EventType.ORDER_APPROVED) {
+        if (eventType == EventType.CUSTOM_ORDER_PARTS_RESERVATION_COMPLETED) {
             orderService.approveCustomOrder(orderId);
             return true;
         }
-        if (eventType == EventType.ORDER_REJECTED) {
+        if (eventType == EventType.CUSTOM_ORDER_PARTS_RESERVATION_REJECTED) {
             orderService.rejectCustomOrderOnCreate(orderId);
             return true;
         }
-        if (eventType == EventType.ORDER_EXECUTION_STARTED) {
+        if (eventType == EventType.CUSTOM_ORDER_EXECUTION_COMPLETED) {
             orderService.markCustomOrderAwaitingDelivery(orderId);
+            return true;
+        }
+        if (eventType == EventType.CUSTOM_ORDER_EXECUTION_REJECTED) {
+            orderService.rejectOrder(orderId, orderType);
+            return true;
+        }
+        if (eventType == EventType.CUSTOM_ORDER_RESERVATION_RELEASE_COMPLETED
+                || eventType == EventType.CUSTOM_ORDER_RESERVATION_RELEASE_REJECTED) {
             return true;
         }
         return false;

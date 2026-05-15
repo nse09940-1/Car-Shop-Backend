@@ -35,7 +35,7 @@ public class OrderApprovalRequestConsumer {
         this.processedEventJpaRepository = Objects.requireNonNull(processedEventJpaRepository, "incomingEventJpaRepository is required");
     }
 
-    @KafkaListener(topics = "#{T(contracts.events.EventTopics).ORDER_EVENTS_V1}", groupId = "${app.kafka.consumer-group}")
+    @KafkaListener(topics = "#{T(contracts.events.EventTopics).ORDER_EVENTS}", groupId = "${app.kafka.consumer-group}")
     @Transactional
     public void onMessage(String message) throws Exception {
         JsonNode root = objectMapper.readTree(message);
@@ -50,7 +50,7 @@ public class OrderApprovalRequestConsumer {
             EventType eventType = EventType.valueOf(root.get("eventType").asText());
             UUID orderId = UUID.fromString(root.get("orderId").asText());
             OrderType orderType = OrderType.valueOf(root.get("orderType").asText());
-            if (eventType == EventType.ORDER_SENT_FOR_APPROVAL) {
+            if (eventType == EventType.CUSTOM_ORDER_PARTS_RESERVATION_REQUESTED) {
                 OrderSentForApprovalPayload payload = objectMapper.treeToValue(root.get("payload"), OrderSentForApprovalPayload.class);
                 AssemblyOrderService.ProcessingResult result = assemblyOrderService.processApprovalRequest(orderId, orderType, payload);
 
@@ -59,11 +59,20 @@ public class OrderApprovalRequestConsumer {
                 } else {
                     storageOutboxService.enqueueRejected(orderId, orderType, result.assemblyOrderId(), result.reason());
                 }
-            } else if (eventType == EventType.ORDER_EXECUTION_REQUESTED) {
+            } else if (eventType == EventType.CUSTOM_ORDER_EXECUTION_REQUESTED) {
                 AssemblyOrderService.ProcessingResult result = assemblyOrderService.processExecutionRequest(orderId, orderType);
-                storageOutboxService.enqueueExecutionStarted(orderId, orderType, result.assemblyOrderId());
-            } else if (eventType == EventType.ORDER_RESERVATION_RELEASE_REQUESTED) {
-                assemblyOrderService.processReservationRelease(orderId, orderType);
+                if (result.approved()) {
+                    storageOutboxService.enqueueExecutionCompleted(orderId, orderType, result.assemblyOrderId());
+                } else {
+                    storageOutboxService.enqueueExecutionRejected(orderId, orderType, result.assemblyOrderId(), result.reason());
+                }
+            } else if (eventType == EventType.CUSTOM_ORDER_RESERVATION_RELEASE_REQUESTED) {
+                AssemblyOrderService.ProcessingResult result = assemblyOrderService.processReservationRelease(orderId, orderType);
+                if (result.approved()) {
+                    storageOutboxService.enqueueCustomReservationReleaseCompleted(orderId, result.assemblyOrderId());
+                } else {
+                    storageOutboxService.enqueueCustomReservationReleaseRejected(orderId, result.assemblyOrderId(), result.reason());
+                }
             } else if (eventType == EventType.STOCK_CAR_RESERVATION_REQUESTED) {
                 StockCarOperationPayload payload = objectMapper.treeToValue(root.get("payload"), StockCarOperationPayload.class);
                 AssemblyOrderService.ProcessingResult result = assemblyOrderService.processStockReservationRequest(orderId, payload);
@@ -79,6 +88,14 @@ public class OrderApprovalRequestConsumer {
                     storageOutboxService.enqueueStockCarWrittenOff(orderId, payload.carId());
                 } else {
                     storageOutboxService.enqueueStockCarWriteOffRejected(orderId, payload.carId(), result.reason());
+                }
+            } else if (eventType == EventType.STOCK_CAR_RESERVATION_RELEASE_REQUESTED) {
+                StockCarOperationPayload payload = objectMapper.treeToValue(root.get("payload"), StockCarOperationPayload.class);
+                AssemblyOrderService.ProcessingResult result = assemblyOrderService.processReservationRelease(orderId, orderType);
+                if (result.approved()) {
+                    storageOutboxService.enqueueStockCarReservationReleaseCompleted(orderId, payload.carId());
+                } else {
+                    storageOutboxService.enqueueStockCarReservationReleaseRejected(orderId, payload.carId(), result.reason());
                 }
             } else {
                 return;

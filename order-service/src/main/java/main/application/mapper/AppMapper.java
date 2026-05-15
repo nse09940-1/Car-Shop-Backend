@@ -1,16 +1,11 @@
 package main.application.mapper;
 
-import main.application.dto.CarCardDto;
 import main.application.dto.CarConfigurationDto;
 import main.application.dto.ConfigurationPriceDto;
 import main.application.dto.CustomOrderDto;
-import main.application.dto.PartDto;
 import main.application.dto.StockOrderDto;
 import main.application.dto.TestDriveDto;
 import main.application.service.ConfiguratorService;
-import main.domain.car.Car;
-import main.domain.car.CarModel;
-import main.domain.car.CarPart;
 import main.domain.configuration.CarConfiguration;
 import main.domain.configuration.ConfigType;
 import main.domain.order.CustomCarOrder;
@@ -22,18 +17,6 @@ import java.util.Map;
 import java.util.UUID;
 
 public final class AppMapper {
-
-    public static CarCardDto toDto(Car car, CarModel carModel) {
-        return new CarCardDto(
-                car.id(),
-                car.vin(),
-                carModel.brand(),
-                carModel.modelCode(),
-                car.color(),
-                car.price(),
-                car.available(),
-                car.availableForTestDrive());
-    }
 
     public static StockOrderDto toDto(StockCarOrder order) {
         return new StockOrderDto(
@@ -62,27 +45,6 @@ public final class AppMapper {
                 request.customerId(),
                 request.carId(),
                 request.scheduledAt());
-    }
-
-    public static PartDto toDto(CarPart carPart) {
-        return new PartDto(
-                carPart.id(),
-                carPart.name(),
-                carPart.partNumber(),
-                carPart.price(),
-                carPart.compatibleModelCodes(),
-                carPart.partType(),
-                carPart.inStock(),
-                carPart.reserved());
-    }
-
-    public static CarPart toDomain(PartDto dto) {
-        UUID id = dto.id() == null ? UUID.randomUUID() : dto.id();
-        return new CarPart(id, dto.name(), dto.partNumber(), dto.price(), dto.compatibleModelCodes(), dto.partType(), dto.inStock(), dto.reserved());
-    }
-
-    public static CarPart toDomain(UUID id, PartDto dto) {
-        return new CarPart(id, dto.name(), dto.partNumber(), dto.price(), dto.compatibleModelCodes(), dto.partType(), dto.inStock(), dto.reserved());
     }
 
     public static ConfigurationPriceDto toDto(ConfiguratorService.BuiltConfiguration built, UUID modelId) {

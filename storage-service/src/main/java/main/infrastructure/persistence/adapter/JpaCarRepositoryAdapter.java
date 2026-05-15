@@ -45,6 +45,16 @@ public class JpaCarRepositoryAdapter implements CarRepository {
     }
 
     @Override
+    public List<Car> findAllAvailable() {
+        return repository.findAllByAvailableTrueAndRemovedFalse().stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public Optional<Car> findAvailableById(UUID id) {
+        return repository.findByIdAndAvailableTrueAndRemovedFalse(id).map(mapper::toDomain);
+    }
+
+    @Override
     public void deleteById(UUID id) {
         repository.findByIdAndRemovedFalse(id).ifPresent(entity -> {
             entity.setRemoved(true);

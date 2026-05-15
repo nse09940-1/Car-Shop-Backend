@@ -1,10 +1,14 @@
 package org.example;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import contracts.grpc.GetCarStateRequest;
+import contracts.grpc.StorageCarServiceGrpc;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import main.Application;
+import main.infrastructure.grpc.StorageGrpcServer;
 import main.infrastructure.persistence.entity.CarJpaEntity;
 import main.infrastructure.persistence.repository.CarJpaRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -23,6 +27,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -61,6 +66,7 @@ class PostgresIT {
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> "http://localhost/test-jwks");
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("app.kafka.consumer-group", () -> "storage-service-it");
+        registry.add("app.grpc.port", () -> "0");
     }
 
     @Autowired
@@ -73,10 +79,19 @@ class PostgresIT {
     private MockMvc mockMvc;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private StorageGrpcServer storageGrpcServer;
 
     @MockBean
     private JwtDecoder jwtDecoder;
+
+    private ManagedChannel channel;
+
+    @AfterEach
+    void tearDown() throws Exception {
+        if (channel != null) {
+            channel.shutdownNow().awaitTermination(1, TimeUnit.SECONDS);
+        }
+    }
 
     @Test
     void migrations_areApplied() {
@@ -127,14 +142,17 @@ class PostgresIT {
     }
 
     @Test
-    void internalEndpoint_isAvailableWithoutAuthentication() throws Exception {
-        String body = mockMvc.perform(get("/internal/cars/{id}", "50000000-0000-0000-0000-000000000001"))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+    void getCarState_returnsSeedCarState() {
+        channel = ManagedChannelBuilder.forAddress("localhost", storageGrpcServer.getPort())
+                .usePlaintext()
+                .build();
+        var stub = StorageCarServiceGrpc.newBlockingStub(channel);
 
-        JsonNode json = objectMapper.readTree(body);
-        assertEquals("50000000-0000-0000-0000-000000000001", json.get("id").asText());
+        var response = stub.getCarState(GetCarStateRequest.newBuilder()
+                .setId("50000000-0000-0000-0000-000000000001")
+                .build());
+
+        assertEquals("50000000-0000-0000-0000-000000000001", response.getId());
+        assertTrue(response.getAvailable());
     }
 }

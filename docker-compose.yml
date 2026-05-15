@@ -84,8 +84,10 @@ services:
       dockerfile: storage-service/Dockerfile
     ports:
       - "8082:8082"
+      - "9090:9090"
     environment:
       APP_HTTP_PORT: 8082
+      APP_GRPC_PORT: 9090
       APP_DB_URL: jdbc:postgresql://postgres-storage:5432/storage_db
       APP_DB_USER: postgres
       APP_DB_PASSWORD: postgres
@@ -114,6 +116,9 @@ services:
       APP_DB_PASSWORD: postgres
       APP_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       APP_STORAGE_BASE_URL: http://storage-service:8082
+      APP_STORAGE_GRPC_HOST: storage-service
+      APP_STORAGE_GRPC_PORT: 9090
+      APP_STORAGE_GRPC_TIMEOUT_MS: 1500
       APP_SECURITY_ISSUER_URI: http://localhost:8081/realms/auto-shop
       APP_SECURITY_JWK_SET_URI: http://host.docker.internal:8081/realms/auto-shop/protocol/openid-connect/certs
     depends_on:

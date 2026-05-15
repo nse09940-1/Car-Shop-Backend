@@ -17,6 +17,4 @@ springdoc:
 app:
   kafka:
     consumer-group: order-service-test
-  storage:
-    base-url: http://localhost:18082
 

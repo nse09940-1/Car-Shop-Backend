@@ -48,6 +48,8 @@ public class SecurityConfig {
                         .hasAnyRole(SecurityRoles.USER, SecurityRoles.ADMIN)
                         .requestMatchers(HttpMethod.GET, "/api/test-drives/requests")
                         .hasAnyRole(SecurityRoles.MANAGER, SecurityRoles.ADMIN)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/cars", "/api/v1/cars/**")
+                        .hasAnyRole(SecurityRoles.USER, SecurityRoles.MANAGER, SecurityRoles.ADMIN)
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /workspace
 COPY . .
@@ -10,7 +10,7 @@ RUN sed -i 's/\r$//' gradlew \
     && test -n "$JAR_FILE" \
     && cp "$JAR_FILE" /tmp/app.jar
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 COPY --from=builder /tmp/app.jar /app/app.jar

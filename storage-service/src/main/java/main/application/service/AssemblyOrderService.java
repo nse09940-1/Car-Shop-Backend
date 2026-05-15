@@ -6,17 +6,16 @@ import contracts.events.RequiredPartItem;
 import contracts.events.StockCarOperationPayload;
 import main.application.dto.AssemblyOrderDto;
 import main.application.dto.AssemblyRequiredPartDto;
+import main.application.port.repository.AssemblyOrderRepository;
+import main.application.port.repository.AssemblyOrderRequiredPartRepository;
 import main.application.port.repository.CarRepository;
 import main.application.port.repository.PartRepository;
+import main.domain.assembly.AssemblyOrder;
 import main.domain.assembly.AssemblyOrderStatus;
+import main.domain.assembly.AssemblyRequiredPart;
 import main.domain.car.Car;
 import main.domain.car.CarPart;
-import main.domain.exception.DomainValidationException;
 import main.domain.exception.EntityNotFoundException;
-import main.infrastructure.persistence.entity.AssemblyOrderJpaEntity;
-import main.infrastructure.persistence.entity.AssemblyOrderRequiredPartJpaEntity;
-import main.infrastructure.persistence.repository.AssemblyOrderJpaRepository;
-import main.infrastructure.persistence.repository.AssemblyOrderRequiredPartJpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,64 +25,60 @@ import java.util.UUID;
 
 @Service
 public class AssemblyOrderService {
-    private final AssemblyOrderJpaRepository assemblyOrderJpaRepository;
-    private final AssemblyOrderRequiredPartJpaRepository requiredPartJpaRepository;
+    private final AssemblyOrderRepository assemblyOrderRepository;
+    private final AssemblyOrderRequiredPartRepository requiredPartRepository;
     private final CarRepository carRepository;
     private final PartRepository partRepository;
 
-    public AssemblyOrderService(AssemblyOrderJpaRepository assemblyOrderJpaRepository,
-                                AssemblyOrderRequiredPartJpaRepository requiredPartJpaRepository,
+    public AssemblyOrderService(AssemblyOrderRepository assemblyOrderRepository,
+                                AssemblyOrderRequiredPartRepository requiredPartRepository,
                                 CarRepository carRepository,
                                 PartRepository partRepository) {
-        this.assemblyOrderJpaRepository = Objects.requireNonNull(assemblyOrderJpaRepository, "assemblyOrderJpaRepository is required");
-        this.requiredPartJpaRepository = Objects.requireNonNull(requiredPartJpaRepository, "requiredPartJpaRepository is required");
+        this.assemblyOrderRepository = Objects.requireNonNull(assemblyOrderRepository, "assemblyOrderRepository is required");
+        this.requiredPartRepository = Objects.requireNonNull(requiredPartRepository, "requiredPartRepository is required");
         this.carRepository = Objects.requireNonNull(carRepository, "carRepository is required");
         this.partRepository = Objects.requireNonNull(partRepository, "partRepository is required");
     }
 
     @Transactional
     public AssemblyOrderDto create(AssemblyOrderDto request) {
-        AssemblyOrderJpaEntity entity = new AssemblyOrderJpaEntity();
+        AssemblyOrder entity = new AssemblyOrder();
         apply(entity, request);
-        entity.setRemoved(false);
-        AssemblyOrderJpaEntity saved = assemblyOrderJpaRepository.save(entity);
+        AssemblyOrder saved = assemblyOrderRepository.save(entity);
         replaceRequiredParts(saved.getId(), request.requiredParts());
         return toDto(saved);
     }
 
     public List<AssemblyOrderDto> findAll() {
-        return assemblyOrderJpaRepository.findAllByRemovedFalse().stream()
+        return assemblyOrderRepository.findAll().stream()
                 .map(this::toDto)
                 .toList();
     }
 
     public AssemblyOrderDto findById(UUID id) {
-        return toDto(assemblyOrderJpaRepository.findByIdAndRemovedFalse(id)
+        return toDto(assemblyOrderRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Assembly order not found")));
     }
 
     @Transactional
     public AssemblyOrderDto update(UUID id, AssemblyOrderDto request) {
-        AssemblyOrderJpaEntity entity = assemblyOrderJpaRepository.findByIdAndRemovedFalse(id)
+        AssemblyOrder entity = assemblyOrderRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Assembly order not found"));
         apply(entity, request);
         entity.setId(id);
-        AssemblyOrderJpaEntity saved = assemblyOrderJpaRepository.save(entity);
+        AssemblyOrder saved = assemblyOrderRepository.save(entity);
         replaceRequiredParts(id, request.requiredParts());
         return toDto(saved);
     }
 
     @Transactional
     public void delete(UUID id) {
-        AssemblyOrderJpaEntity entity = assemblyOrderJpaRepository.findByIdAndRemovedFalse(id)
-                .orElseThrow(() -> new EntityNotFoundException("Assembly order not found"));
-        entity.setRemoved(true);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.deleteById(id);
     }
 
     @Transactional
     public ProcessingResult processApprovalRequest(UUID orderId, OrderType orderType, OrderSentForApprovalPayload payload) {
-        AssemblyOrderJpaEntity entity = assemblyOrderJpaRepository.findBySourceOrderIdAndRemovedFalse(orderId)
+        AssemblyOrder entity = assemblyOrderRepository.findBySourceOrderId(orderId)
                 .orElseGet(() -> createNew(orderId, orderType, payload));
 
         if (entity.getStatus() == AssemblyOrderStatus.ASSEMBLED
@@ -103,7 +98,7 @@ public class AssemblyOrderService {
 
     @Transactional
     public ProcessingResult processStockReservationRequest(UUID orderId, StockCarOperationPayload payload) {
-        AssemblyOrderJpaEntity entity = assemblyOrderJpaRepository.findBySourceOrderIdAndRemovedFalse(orderId)
+        AssemblyOrder entity = assemblyOrderRepository.findBySourceOrderId(orderId)
                 .orElseGet(() -> createStockNew(orderId, payload == null ? null : payload.carId()));
 
         if (entity.getStatus() == AssemblyOrderStatus.RESERVED || entity.getStatus() == AssemblyOrderStatus.ASSEMBLED) {
@@ -129,13 +124,13 @@ public class AssemblyOrderService {
         entity.setCarId(carId);
         entity.setStatus(AssemblyOrderStatus.RESERVED);
         entity.setFailureReason(null);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.save(entity);
         return ProcessingResult.approved(entity.getId());
     }
 
     @Transactional
     public ProcessingResult processStockWriteOffRequest(UUID orderId, StockCarOperationPayload payload) {
-        AssemblyOrderJpaEntity entity = assemblyOrderJpaRepository.findBySourceOrderIdAndRemovedFalse(orderId)
+        AssemblyOrder entity = assemblyOrderRepository.findBySourceOrderId(orderId)
                 .orElse(null);
         if (entity == null) {
             return ProcessingResult.rejected(null, "Assembly order not found");
@@ -161,92 +156,154 @@ public class AssemblyOrderService {
         entity.setCarId(carId);
         entity.setStatus(AssemblyOrderStatus.ASSEMBLED);
         entity.setFailureReason(null);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.save(entity);
         return ProcessingResult.approved(entity.getId());
     }
 
     @Transactional
     public ProcessingResult processExecutionRequest(UUID orderId, OrderType orderType) {
         if (orderType != OrderType.CUSTOM) {
-            throw new DomainValidationException("Execution request is supported only for custom orders");
+            return ProcessingResult.rejected(null, "Execution request is supported only for custom orders");
         }
 
-        AssemblyOrderJpaEntity entity = assemblyOrderJpaRepository.findBySourceOrderIdAndRemovedFalse(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Assembly order not found"));
+        AssemblyOrder entity = assemblyOrderRepository.findBySourceOrderId(orderId)
+                .orElse(null);
+        if (entity == null) {
+            return ProcessingResult.rejected(null, "Assembly order not found");
+        }
 
         if (entity.getStatus() == AssemblyOrderStatus.IN_PROGRESS || entity.getStatus() == AssemblyOrderStatus.ASSEMBLED) {
             return ProcessingResult.approved(entity.getId());
         }
         if (entity.getStatus() != AssemblyOrderStatus.RESERVED) {
-            throw new DomainValidationException("Assembly order is not reserved");
+            return ProcessingResult.rejected(entity.getId(), "Assembly order is not reserved");
         }
 
-        for (AssemblyOrderRequiredPartJpaEntity item : requiredPartJpaRepository.findAllByAssemblyOrderId(entity.getId())) {
-            CarPart part = partRepository.findById(item.getPartId())
-                    .orElseThrow(() -> new EntityNotFoundException("Part not found"));
-            partRepository.save(part.consume(item.getQuantity()));
+        for (AssemblyRequiredPart item : requiredPartRepository.findAllByAssemblyOrderId(entity.getId())) {
+            CarPart part = partRepository.findById(item.partId()).orElse(null);
+            if (part == null) {
+                return ProcessingResult.rejected(entity.getId(), "Part not found");
+            }
+            if (part.reserved() < item.quantity()) {
+                return ProcessingResult.rejected(entity.getId(), "Cannot consume more than reserved for part " + part.partNumber());
+            }
+        }
+
+        for (AssemblyRequiredPart item : requiredPartRepository.findAllByAssemblyOrderId(entity.getId())) {
+            CarPart part = partRepository.findById(item.partId()).orElseThrow();
+            partRepository.save(part.consume(item.quantity()));
         }
 
         entity.setStatus(AssemblyOrderStatus.IN_PROGRESS);
         entity.setFailureReason(null);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.save(entity);
         return ProcessingResult.approved(entity.getId());
     }
 
     @Transactional
-    public void processReservationRelease(UUID orderId, OrderType orderType) {
-        if (orderType != OrderType.CUSTOM) {
-            return;
+    public ProcessingResult processReservationRelease(UUID orderId, OrderType orderType) {
+        if (orderType == OrderType.CUSTOM) {
+            return processCustomReservationRelease(orderId);
         }
+        if (orderType == OrderType.STOCK) {
+            return processStockReservationRelease(orderId);
+        }
+        return ProcessingResult.rejected(null, "Unsupported order type");
+    }
 
-        AssemblyOrderJpaEntity entity = assemblyOrderJpaRepository.findBySourceOrderIdAndRemovedFalse(orderId)
+    private ProcessingResult processCustomReservationRelease(UUID orderId) {
+        AssemblyOrder entity = assemblyOrderRepository.findBySourceOrderId(orderId)
                 .orElse(null);
-        if (entity == null
-                || entity.getStatus() == AssemblyOrderStatus.RELEASED
-                || entity.getStatus() == AssemblyOrderStatus.IN_PROGRESS
+        if (entity == null) {
+            return ProcessingResult.rejected(null, "Assembly order not found");
+        }
+        if (entity.getStatus() == AssemblyOrderStatus.RELEASED) {
+            return ProcessingResult.approved(entity.getId());
+        }
+        if (entity.getStatus() == AssemblyOrderStatus.IN_PROGRESS
                 || entity.getStatus() == AssemblyOrderStatus.ASSEMBLED
                 || entity.getStatus() == AssemblyOrderStatus.FAIL) {
-            return;
+            return ProcessingResult.rejected(entity.getId(), "Reservation cannot be released from status " + entity.getStatus());
         }
         if (entity.getStatus() != AssemblyOrderStatus.RESERVED) {
-            return;
+            return ProcessingResult.rejected(entity.getId(), "Assembly order is not reserved");
         }
 
-        for (AssemblyOrderRequiredPartJpaEntity item : requiredPartJpaRepository.findAllByAssemblyOrderId(entity.getId())) {
-            CarPart part = partRepository.findById(item.getPartId())
-                    .orElseThrow(() -> new EntityNotFoundException("Part not found"));
-            partRepository.save(part.release(item.getQuantity()));
+        for (AssemblyRequiredPart item : requiredPartRepository.findAllByAssemblyOrderId(entity.getId())) {
+            CarPart part = partRepository.findById(item.partId()).orElse(null);
+            if (part == null) {
+                return ProcessingResult.rejected(entity.getId(), "Part not found");
+            }
+            if (part.reserved() < item.quantity()) {
+                return ProcessingResult.rejected(entity.getId(), "Cannot release more than reserved for part " + part.partNumber());
+            }
+        }
+
+        for (AssemblyRequiredPart item : requiredPartRepository.findAllByAssemblyOrderId(entity.getId())) {
+            CarPart part = partRepository.findById(item.partId()).orElseThrow();
+            partRepository.save(part.release(item.quantity()));
         }
 
         entity.setStatus(AssemblyOrderStatus.RELEASED);
         entity.setFailureReason(null);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.save(entity);
+        return ProcessingResult.approved(entity.getId());
     }
 
-    private AssemblyOrderJpaEntity createNew(UUID orderId, OrderType orderType, OrderSentForApprovalPayload payload) {
-        AssemblyOrderJpaEntity entity = new AssemblyOrderJpaEntity();
+    private ProcessingResult processStockReservationRelease(UUID orderId) {
+        AssemblyOrder entity = assemblyOrderRepository.findBySourceOrderId(orderId)
+                .orElse(null);
+        if (entity == null) {
+            return ProcessingResult.rejected(null, "Assembly order not found");
+        }
+        if (entity.getStatus() == AssemblyOrderStatus.RELEASED) {
+            return ProcessingResult.approved(entity.getId());
+        }
+        if (entity.getStatus() == AssemblyOrderStatus.ASSEMBLED
+                || entity.getStatus() == AssemblyOrderStatus.IN_PROGRESS
+                || entity.getStatus() == AssemblyOrderStatus.FAIL) {
+            return ProcessingResult.rejected(entity.getId(), "Reservation cannot be released from status " + entity.getStatus());
+        }
+        if (entity.getStatus() != AssemblyOrderStatus.RESERVED) {
+            return ProcessingResult.rejected(entity.getId(), "Car is not reserved");
+        }
+        if (entity.getCarId() == null) {
+            return ProcessingResult.rejected(entity.getId(), "carId is required");
+        }
+        Car car = carRepository.findById(entity.getCarId()).orElse(null);
+        if (car == null) {
+            return ProcessingResult.rejected(entity.getId(), "Car not found");
+        }
+
+        carRepository.save(car.withAvailable(true));
+        entity.setStatus(AssemblyOrderStatus.RELEASED);
+        entity.setFailureReason(null);
+        assemblyOrderRepository.save(entity);
+        return ProcessingResult.approved(entity.getId());
+    }
+
+    private AssemblyOrder createNew(UUID orderId, OrderType orderType, OrderSentForApprovalPayload payload) {
+        AssemblyOrder entity = new AssemblyOrder();
         entity.setSourceOrderId(orderId);
         entity.setSourceOrderType(orderType);
         entity.setCarId(payload.carId());
         entity.setCarModelId(payload.carModelId());
         entity.setStatus(AssemblyOrderStatus.CREATED);
-        entity.setRemoved(false);
-        AssemblyOrderJpaEntity saved = assemblyOrderJpaRepository.save(entity);
+        AssemblyOrder saved = assemblyOrderRepository.save(entity);
         replaceRequiredParts(saved.getId(), toRequiredPartDtos(payload.requiredParts()));
         return saved;
     }
 
-    private AssemblyOrderJpaEntity createStockNew(UUID orderId, UUID carId) {
-        AssemblyOrderJpaEntity entity = new AssemblyOrderJpaEntity();
+    private AssemblyOrder createStockNew(UUID orderId, UUID carId) {
+        AssemblyOrder entity = new AssemblyOrder();
         entity.setSourceOrderId(orderId);
         entity.setSourceOrderType(OrderType.STOCK);
         entity.setCarId(carId);
         entity.setStatus(AssemblyOrderStatus.CREATED);
-        entity.setRemoved(false);
-        return assemblyOrderJpaRepository.save(entity);
+        return assemblyOrderRepository.save(entity);
     }
 
-    private ProcessingResult processStock(AssemblyOrderJpaEntity entity, OrderSentForApprovalPayload payload) {
+    private ProcessingResult processStock(AssemblyOrder entity, OrderSentForApprovalPayload payload) {
         if (payload.carId() == null) {
             return fail(entity, "carId is required");
         }
@@ -261,11 +318,11 @@ public class AssemblyOrderService {
         carRepository.save(car.withAvailable(false));
         entity.setStatus(AssemblyOrderStatus.ASSEMBLED);
         entity.setFailureReason(null);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.save(entity);
         return ProcessingResult.approved(entity.getId());
     }
 
-    private ProcessingResult processCustom(AssemblyOrderJpaEntity entity, OrderSentForApprovalPayload payload) {
+    private ProcessingResult processCustom(AssemblyOrder entity, OrderSentForApprovalPayload payload) {
         List<RequiredPartItem> requiredParts = payload.requiredParts() == null ? List.of() : payload.requiredParts();
         for (RequiredPartItem item : requiredParts) {
             CarPart part = partRepository.findById(item.partId()).orElse(null);
@@ -285,18 +342,18 @@ public class AssemblyOrderService {
 
         entity.setStatus(AssemblyOrderStatus.RESERVED);
         entity.setFailureReason(null);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.save(entity);
         return ProcessingResult.approved(entity.getId());
     }
 
-    private ProcessingResult fail(AssemblyOrderJpaEntity entity, String reason) {
+    private ProcessingResult fail(AssemblyOrder entity, String reason) {
         entity.setStatus(AssemblyOrderStatus.FAIL);
         entity.setFailureReason(reason);
-        assemblyOrderJpaRepository.save(entity);
+        assemblyOrderRepository.save(entity);
         return ProcessingResult.rejected(entity.getId(), reason);
     }
 
-    private void apply(AssemblyOrderJpaEntity entity, AssemblyOrderDto request) {
+    private void apply(AssemblyOrder entity, AssemblyOrderDto request) {
         entity.setSourceOrderId(request.sourceOrderId());
         entity.setSourceOrderType(request.sourceOrderType());
         entity.setCarId(request.carId());
@@ -307,17 +364,9 @@ public class AssemblyOrderService {
     }
 
     private void replaceRequiredParts(UUID assemblyOrderId, List<AssemblyRequiredPartDto> requiredParts) {
-        requiredPartJpaRepository.deleteAllByAssemblyOrderId(assemblyOrderId);
-        if (requiredParts == null) {
-            return;
-        }
-        for (AssemblyRequiredPartDto item : requiredParts) {
-            AssemblyOrderRequiredPartJpaEntity entity = new AssemblyOrderRequiredPartJpaEntity();
-            entity.setAssemblyOrderId(assemblyOrderId);
-            entity.setPartId(item.partId());
-            entity.setQuantity(item.quantity());
-            requiredPartJpaRepository.save(entity);
-        }
+        requiredPartRepository.replaceAll(assemblyOrderId, requiredParts == null ? List.of() : requiredParts.stream()
+                .map(item -> new AssemblyRequiredPart(item.partId(), item.quantity()))
+                .toList());
     }
 
     private List<AssemblyRequiredPartDto> toRequiredPartDtos(List<RequiredPartItem> requiredParts) {
@@ -329,7 +378,7 @@ public class AssemblyOrderService {
                 .toList();
     }
 
-    private AssemblyOrderDto toDto(AssemblyOrderJpaEntity entity) {
+    private AssemblyOrderDto toDto(AssemblyOrder entity) {
         return new AssemblyOrderDto(
                 entity.getId(),
                 entity.getSourceOrderId(),
@@ -341,8 +390,8 @@ public class AssemblyOrderService {
                 entity.getFailureReason(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                requiredPartJpaRepository.findAllByAssemblyOrderId(entity.getId()).stream()
-                        .map(item -> new AssemblyRequiredPartDto(item.getPartId(), item.getQuantity()))
+                requiredPartRepository.findAllByAssemblyOrderId(entity.getId()).stream()
+                        .map(item -> new AssemblyRequiredPartDto(item.partId(), item.quantity()))
                         .toList());
     }
 

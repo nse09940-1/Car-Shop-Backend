@@ -3,9 +3,6 @@ package main;
 import main.application.mapper.AppMapper;
 import main.domain.Money;
 import main.domain.TestDriveRequest;
-import main.domain.car.Car;
-import main.domain.car.CarModel;
-import main.domain.car.CarPart;
 import main.domain.car.CarProperty;
 import main.domain.car.CarType;
 import main.domain.car.DriveType;
@@ -13,7 +10,6 @@ import main.domain.car.Engine;
 import main.domain.car.FuelType;
 import main.domain.car.TransmissionType;
 import main.domain.configuration.CarConfiguration;
-import main.domain.configuration.ConfigType;
 import main.domain.configuration.OptionSpec;
 import main.domain.configuration.WheelOption;
 import main.domain.exception.DomainValidationException;
@@ -65,7 +61,7 @@ class PolicyAndMapperTest {
         assertTrue(policy.canTransition(StockOrderStatus.CREATED, StockOrderStatus.CANCELLED));
         assertFalse(policy.canTransition(StockOrderStatus.CREATED, StockOrderStatus.PAID));
         assertTrue(policy.canTransition(StockOrderStatus.MANAGER_APPROVED, StockOrderStatus.AWAITING_PAYMENT));
-        assertTrue(policy.canTransition(StockOrderStatus.PAID, StockOrderStatus.READY_FOR_HANDOVER));
+        assertTrue(policy.canTransition(StockOrderStatus.PAID, StockOrderStatus.AWAITING_DELIVERY));
         assertFalse(policy.canTransition(StockOrderStatus.COMPLETED, StockOrderStatus.CREATED));
         assertTrue(policy.canTransition(CustomOrderStatus.CREATED, CustomOrderStatus.WAREHOUSE_APPROVED));
         assertFalse(policy.canTransition(CustomOrderStatus.CREATED, CustomOrderStatus.AWAITING_PAYMENT));
@@ -84,9 +80,6 @@ class PolicyAndMapperTest {
 
     @Test
     void mapper_allDtoConversions() {
-        UUID modelId = UUID.randomUUID();
-        CarModel model = new CarModel(modelId, "BMW", "320i", new Money(3_000_000), PROPS, Set.of());
-        Car car = new Car(UUID.randomUUID(), "VIN-1", modelId, "Red", new Money(3_500_000), true, false);
         StockCarOrder stockOrder = new StockCarOrder(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), LocalDateTime.now(), UUID.randomUUID(), StockOrderStatus.CREATED);
         CustomCarOrder customOrder = new CustomCarOrder(UUID.randomUUID(), UUID.randomUUID(),
@@ -94,12 +87,9 @@ class PolicyAndMapperTest {
                 new CarConfiguration(null, null, null, null), new Money(4_000_000), CustomOrderStatus.CREATED);
         TestDriveRequest request = new TestDriveRequest(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), LocalDateTime.now().plusDays(2));
-        CarPart part = new CarPart(UUID.randomUUID(), "Brake", "BBBB", new Money(5_000), Set.of("320i"), ConfigType.WHEELS);
 
-        assertEquals("BMW", AppMapper.toDto(car, model).brand());
         assertEquals(stockOrder.id(), AppMapper.toDto(stockOrder).id());
         assertEquals(4_000_000, AppMapper.toDto(customOrder).totalPrice().rubles());
         assertEquals(request.customerId(), AppMapper.toDto(request).customerId());
-        assertEquals(part.id(), AppMapper.toDomain(AppMapper.toDto(part)).id());
     }
 }

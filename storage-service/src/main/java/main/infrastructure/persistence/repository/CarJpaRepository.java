@@ -13,5 +13,9 @@ public interface CarJpaRepository extends JpaRepository<CarJpaEntity, UUID> {
     Optional<CarJpaEntity> findByVinAndRemovedFalse(String vin);
 
     List<CarJpaEntity> findAllByRemovedFalse();
+
+    List<CarJpaEntity> findAllByAvailableTrueAndRemovedFalse();
+
+    Optional<CarJpaEntity> findByIdAndAvailableTrueAndRemovedFalse(UUID id);
 }
 

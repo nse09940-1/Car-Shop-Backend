@@ -35,18 +35,6 @@ public class OrderOutboxService {
         this.traceIdProvider = Objects.requireNonNull(traceIdProvider, "traceIdProvider is required");
     }
 
-    public void enqueueOrderSentForApproval(StockCarOrder order) {
-        EventEnvelope<OrderSentForApprovalPayload> envelope = new EventEnvelope<>(
-                UUID.randomUUID(),
-                EventType.ORDER_SENT_FOR_APPROVAL,
-                Instant.now(),
-                traceIdProvider.currentOrCreate(),
-                order.id(),
-                OrderType.STOCK,
-                new OrderSentForApprovalPayload(order.carId(), null, List.of()));
-        saveEnvelope(envelope, order.id());
-    }
-
     public void enqueueStockCarReservationRequested(StockCarOrder order) {
         EventEnvelope<StockCarOperationPayload> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
@@ -71,10 +59,22 @@ public class OrderOutboxService {
         saveEnvelope(envelope, order.id());
     }
 
-    public void enqueueOrderSentForApproval(CustomCarOrder order, List<RequiredPartItem> requiredPartItems) {
+    public void enqueueStockCarReservationReleaseRequested(StockCarOrder order) {
+        EventEnvelope<StockCarOperationPayload> envelope = new EventEnvelope<>(
+                UUID.randomUUID(),
+                EventType.STOCK_CAR_RESERVATION_RELEASE_REQUESTED,
+                Instant.now(),
+                traceIdProvider.currentOrCreate(),
+                order.id(),
+                OrderType.STOCK,
+                new StockCarOperationPayload(order.carId(), null));
+        saveEnvelope(envelope, order.id());
+    }
+
+    public void enqueueCustomCarPartsReservationRequested(CustomCarOrder order, List<RequiredPartItem> requiredPartItems) {
         EventEnvelope<OrderSentForApprovalPayload> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.ORDER_SENT_FOR_APPROVAL,
+                EventType.CUSTOM_ORDER_PARTS_RESERVATION_REQUESTED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 order.id(),
@@ -83,10 +83,10 @@ public class OrderOutboxService {
         saveEnvelope(envelope, order.id());
     }
 
-    public void enqueueOrderExecutionRequested(CustomCarOrder order) {
+    public void enqueueCustomExecutionRequested(CustomCarOrder order) {
         EventEnvelope<Void> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.ORDER_EXECUTION_REQUESTED,
+                EventType.CUSTOM_ORDER_EXECUTION_REQUESTED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 order.id(),
@@ -95,10 +95,10 @@ public class OrderOutboxService {
         saveEnvelope(envelope, order.id());
     }
 
-    public void enqueueReservationReleaseRequested(CustomCarOrder order) {
+    public void enqueueCustomReservationReleaseRequested(CustomCarOrder order) {
         EventEnvelope<Void> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.ORDER_RESERVATION_RELEASE_REQUESTED,
+                EventType.CUSTOM_ORDER_RESERVATION_RELEASE_REQUESTED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 order.id(),

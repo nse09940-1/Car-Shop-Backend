@@ -35,7 +35,7 @@ public class StorageOutboxService {
     public void enqueueApproved(UUID orderId, OrderType orderType, UUID assemblyOrderId) {
         EventEnvelope<OrderApprovedPayload> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.ORDER_APPROVED,
+                EventType.CUSTOM_ORDER_PARTS_RESERVATION_COMPLETED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 orderId,
@@ -47,7 +47,7 @@ public class StorageOutboxService {
     public void enqueueRejected(UUID orderId, OrderType orderType, UUID assemblyOrderId, String reason) {
         EventEnvelope<OrderRejectedPayload> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.ORDER_REJECTED,
+                EventType.CUSTOM_ORDER_PARTS_RESERVATION_REJECTED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 orderId,
@@ -56,10 +56,10 @@ public class StorageOutboxService {
         save(envelope, orderId);
     }
 
-    public void enqueueExecutionStarted(UUID orderId, OrderType orderType, UUID assemblyOrderId) {
+    public void enqueueExecutionCompleted(UUID orderId, OrderType orderType, UUID assemblyOrderId) {
         EventEnvelope<OrderApprovedPayload> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.ORDER_EXECUTION_STARTED,
+                EventType.CUSTOM_ORDER_EXECUTION_COMPLETED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 orderId,
@@ -68,10 +68,46 @@ public class StorageOutboxService {
         save(envelope, orderId);
     }
 
+    public void enqueueExecutionRejected(UUID orderId, OrderType orderType, UUID assemblyOrderId, String reason) {
+        EventEnvelope<OrderRejectedPayload> envelope = new EventEnvelope<>(
+                UUID.randomUUID(),
+                EventType.CUSTOM_ORDER_EXECUTION_REJECTED,
+                Instant.now(),
+                traceIdProvider.currentOrCreate(),
+                orderId,
+                orderType,
+                new OrderRejectedPayload(assemblyOrderId, reason));
+        save(envelope, orderId);
+    }
+
+    public void enqueueCustomReservationReleaseCompleted(UUID orderId, UUID assemblyOrderId) {
+        EventEnvelope<OrderApprovedPayload> envelope = new EventEnvelope<>(
+                UUID.randomUUID(),
+                EventType.CUSTOM_ORDER_RESERVATION_RELEASE_COMPLETED,
+                Instant.now(),
+                traceIdProvider.currentOrCreate(),
+                orderId,
+                OrderType.CUSTOM,
+                new OrderApprovedPayload(assemblyOrderId));
+        save(envelope, orderId);
+    }
+
+    public void enqueueCustomReservationReleaseRejected(UUID orderId, UUID assemblyOrderId, String reason) {
+        EventEnvelope<OrderRejectedPayload> envelope = new EventEnvelope<>(
+                UUID.randomUUID(),
+                EventType.CUSTOM_ORDER_RESERVATION_RELEASE_REJECTED,
+                Instant.now(),
+                traceIdProvider.currentOrCreate(),
+                orderId,
+                OrderType.CUSTOM,
+                new OrderRejectedPayload(assemblyOrderId, reason));
+        save(envelope, orderId);
+    }
+
     public void enqueueStockCarReserved(UUID orderId, UUID carId) {
         EventEnvelope<StockCarOperationPayload> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.STOCK_CAR_RESERVED,
+                EventType.STOCK_CAR_RESERVATION_COMPLETED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 orderId,
@@ -95,12 +131,36 @@ public class StorageOutboxService {
     public void enqueueStockCarWrittenOff(UUID orderId, UUID carId) {
         EventEnvelope<StockCarOperationPayload> envelope = new EventEnvelope<>(
                 UUID.randomUUID(),
-                EventType.STOCK_CAR_WRITTEN_OFF,
+                EventType.STOCK_CAR_WRITE_OFF_COMPLETED,
                 Instant.now(),
                 traceIdProvider.currentOrCreate(),
                 orderId,
                 OrderType.STOCK,
                 new StockCarOperationPayload(carId, null));
+        save(envelope, orderId);
+    }
+
+    public void enqueueStockCarReservationReleaseCompleted(UUID orderId, UUID carId) {
+        EventEnvelope<StockCarOperationPayload> envelope = new EventEnvelope<>(
+                UUID.randomUUID(),
+                EventType.STOCK_CAR_RESERVATION_RELEASE_COMPLETED,
+                Instant.now(),
+                traceIdProvider.currentOrCreate(),
+                orderId,
+                OrderType.STOCK,
+                new StockCarOperationPayload(carId, null));
+        save(envelope, orderId);
+    }
+
+    public void enqueueStockCarReservationReleaseRejected(UUID orderId, UUID carId, String reason) {
+        EventEnvelope<StockCarOperationPayload> envelope = new EventEnvelope<>(
+                UUID.randomUUID(),
+                EventType.STOCK_CAR_RESERVATION_RELEASE_REJECTED,
+                Instant.now(),
+                traceIdProvider.currentOrCreate(),
+                orderId,
+                OrderType.STOCK,
+                new StockCarOperationPayload(carId, reason));
         save(envelope, orderId);
     }
 

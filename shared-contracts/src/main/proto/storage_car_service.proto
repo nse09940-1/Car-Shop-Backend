@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package contracts.grpc;
+
+option java_multiple_files = true;
+option java_package = "contracts.grpc";
+option java_outer_classname = "StorageCarServiceProto";
+
+service StorageCarService {
+  rpc ListAvailableCars(ListAvailableCarsRequest) returns (ListAvailableCarsResponse);
+  rpc GetAvailableCar(GetAvailableCarRequest) returns (AvailableCarResponse);
+  rpc GetCarState(GetCarStateRequest) returns (CarStateResponse);
+}
+
+message ListAvailableCarsRequest {
+}
+
+message GetAvailableCarRequest {
+  string id = 1;
+}
+
+message GetCarStateRequest {
+  string id = 1;
+}
+
+message AvailableCarResponse {
+  string id = 1;
+  string vin = 2;
+  string car_model_id = 3;
+  string color = 4;
+  int64 price_rubles = 5;
+  bool available_for_test_drive = 6;
+}
+
+message ListAvailableCarsResponse {
+  repeated AvailableCarResponse cars = 1;
+}
+
+message CarStateResponse {
+  string id = 1;
+  bool available = 2;
+  bool available_for_test_drive = 3;
+}

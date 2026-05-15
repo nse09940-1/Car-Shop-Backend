@@ -35,7 +35,7 @@ public class DefaultOrderTransitionPolicy implements OrderTransitionPolicy {
         map.put(StockOrderStatus.CREATED, EnumSet.of(StockOrderStatus.MANAGER_APPROVED, StockOrderStatus.CANCELLED));
         map.put(StockOrderStatus.MANAGER_APPROVED, EnumSet.of(StockOrderStatus.AWAITING_PAYMENT, StockOrderStatus.CANCELLED));
         map.put(StockOrderStatus.AWAITING_PAYMENT, EnumSet.of(StockOrderStatus.PAID, StockOrderStatus.CANCELLED));
-        map.put(StockOrderStatus.PAID, EnumSet.of(StockOrderStatus.READY_FOR_HANDOVER, StockOrderStatus.CANCELLED));
+        map.put(StockOrderStatus.PAID, EnumSet.of(StockOrderStatus.AWAITING_DELIVERY, StockOrderStatus.CANCELLED));
         map.put(StockOrderStatus.AWAITING_DELIVERY, EnumSet.of(StockOrderStatus.READY_FOR_HANDOVER));
         map.put(StockOrderStatus.READY_FOR_HANDOVER, EnumSet.of(StockOrderStatus.COMPLETED));
         map.put(StockOrderStatus.COMPLETED, EnumSet.noneOf(StockOrderStatus.class));

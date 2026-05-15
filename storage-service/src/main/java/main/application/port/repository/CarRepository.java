@@ -15,6 +15,10 @@ public interface CarRepository {
 
     List<Car> findAll();
 
+    List<Car> findAllAvailable();
+
+    Optional<Car> findAvailableById(UUID id);
+
     void deleteById(UUID id);
 }
 

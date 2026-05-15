@@ -7,6 +7,9 @@ plugins {
 ext {
     mapstructVersion = '1.5.5.Final'
     testcontainersVersion = '1.21.4'
+    grpcVersion = '1.65.1'
+    protobufVersion = '3.25.5'
+    protobufPluginVersion = '0.9.4'
 }
 
 subprojects {

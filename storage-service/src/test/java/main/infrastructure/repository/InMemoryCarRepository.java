@@ -34,6 +34,16 @@ public class InMemoryCarRepository implements CarRepository {
     }
 
     @Override
+    public List<Car> findAllAvailable() {
+        return storage.values().stream().filter(Car::available).toList();
+    }
+
+    @Override
+    public Optional<Car> findAvailableById(UUID id) {
+        return findById(id).filter(Car::available);
+    }
+
+    @Override
     public void deleteById(UUID id) {
         storage.remove(id);
     }

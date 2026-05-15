@@ -2,8 +2,13 @@ package org.example;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import contracts.events.EventType;
 import main.Application;
+import main.application.dto.AvailableCarDto;
+import main.application.port.client.StorageCarCatalogClient;
 import main.application.port.client.StorageReadClient;
+import main.domain.Money;
+import main.domain.exception.StorageServiceUnavailableException;
 import main.infrastructure.persistence.entity.OutboxEventJpaEntity;
 import main.infrastructure.persistence.repository.OutboxEventJpaRepository;
 import org.junit.jupiter.api.Test;
@@ -24,6 +29,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.UUID;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -66,7 +74,6 @@ class PostgresIT {
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> "http://localhost/test-jwks");
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("app.kafka.consumer-group", () -> "order-service-it");
-        registry.add("app.storage.base-url", () -> "http://localhost:18082");
     }
 
     @Autowired
@@ -86,6 +93,9 @@ class PostgresIT {
 
     @MockBean
     private StorageReadClient storageReadClient;
+
+    @MockBean
+    private StorageCarCatalogClient storageCarCatalogClient;
 
     @Test
     void migrations_areApplied() {
@@ -139,9 +149,11 @@ class PostgresIT {
                                 .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
                 .andExpect(status().isOk());
 
-        assertEquals(1, outboxEventJpaRepository.findAll().stream()
-                .filter(OutboxEventJpaEntity::isPublished)
-                .count() + outboxEventJpaRepository.findAll().stream().filter(event -> !event.isPublished()).count());
+        Set<String> eventTypes = outboxEventJpaRepository.findAll().stream()
+                .map(OutboxEventJpaEntity::getEventType)
+                .collect(Collectors.toSet());
+        assertTrue(eventTypes.contains(EventType.STOCK_CAR_RESERVATION_REQUESTED.name()));
+        assertTrue(eventTypes.contains(EventType.STOCK_CAR_WRITE_OFF_REQUESTED.name()));
     }
 
     @Test
@@ -161,5 +173,79 @@ class PostgresIT {
                         .with(jwt().jwt(jwt -> jwt.claim("app_user_id", ADMIN_USER_ID))
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void carAvailabilityEndpoint_allowsUserManagerAndAdmin() throws Exception {
+        UUID carId = UUID.randomUUID();
+        when(storageCarCatalogClient.findAvailableCars()).thenReturn(List.of(
+                new AvailableCarDto(carId, "VIN-1", UUID.randomUUID(), "Black", new Money(1_000_000), true)));
+
+        mockMvc.perform(get("/api/v1/cars")
+                        .with(jwt().jwt(jwt -> jwt.claim("app_user_id", CLIENT_USER_ID))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/cars")
+                        .with(jwt().jwt(jwt -> jwt.claim("app_user_id", MANAGER_USER_ID))
+                                .authorities(new SimpleGrantedAuthority("ROLE_MANAGER"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/cars")
+                        .with(jwt().jwt(jwt -> jwt.claim("app_user_id", ADMIN_USER_ID))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void carAvailabilityEndpoint_requiresAuthenticationAndMapsUnavailable() throws Exception {
+        mockMvc.perform(get("/api/v1/cars"))
+                .andExpect(status().isUnauthorized());
+
+        when(storageCarCatalogClient.findAvailableCars())
+                .thenThrow(new StorageServiceUnavailableException("Storage service is unavailable"));
+
+        mockMvc.perform(get("/api/v1/cars")
+                        .with(jwt().jwt(jwt -> jwt.claim("app_user_id", CLIENT_USER_ID))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void testDriveRequest_mapsStorageUnavailableTo503() throws Exception {
+        when(storageReadClient.getCar(any(UUID.class)))
+                .thenThrow(new StorageServiceUnavailableException("Storage service is unavailable"));
+
+        mockMvc.perform(post("/api/test-drives/requests")
+                        .contentType("application/json")
+                        .content("{\"carId\":\"50000000-0000-0000-0000-000000000001\",\"scheduledAt\":\"2099-01-01T10:00:00\"}")
+                        .with(jwt().jwt(jwt -> jwt.claim("app_user_id", CLIENT_USER_ID))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void testDriveRequest_keepsBusinessValidationAs400() throws Exception {
+        UUID notAvailableCarId = UUID.randomUUID();
+        when(storageReadClient.getCar(notAvailableCarId))
+                .thenReturn(new StorageReadClient.StorageCarSnapshot(notAvailableCarId, false, true));
+
+        mockMvc.perform(post("/api/test-drives/requests")
+                        .contentType("application/json")
+                        .content("{\"carId\":\"" + notAvailableCarId + "\",\"scheduledAt\":\"2099-01-01T10:00:00\"}")
+                        .with(jwt().jwt(jwt -> jwt.claim("app_user_id", CLIENT_USER_ID))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isBadRequest());
+
+        UUID notInTestDriveListCarId = UUID.randomUUID();
+        when(storageReadClient.getCar(notInTestDriveListCarId))
+                .thenReturn(new StorageReadClient.StorageCarSnapshot(notInTestDriveListCarId, true, false));
+
+        mockMvc.perform(post("/api/test-drives/requests")
+                        .contentType("application/json")
+                        .content("{\"carId\":\"" + notInTestDriveListCarId + "\",\"scheduledAt\":\"2099-01-01T10:00:00\"}")
+                        .with(jwt().jwt(jwt -> jwt.claim("app_user_id", CLIENT_USER_ID))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isBadRequest());
     }
 }
